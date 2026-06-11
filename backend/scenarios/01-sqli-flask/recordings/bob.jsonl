@@ -1,0 +1,11 @@
+{"type": "init", "timestamp": "2026-06-10T20:00:00.000Z", "session_id": "rec", "model": "premium"}
+{"type": "tool_use", "tool_name": "read", "activity_label": "Listing project files", "parameters": {}}
+{"type": "tool_use", "tool_name": "read", "activity_label": "Reading the target module", "parameters": {}}
+{"type": "tool_use", "tool_name": "grep", "activity_label": "Locating the defect", "parameters": {}}
+{"type": "tool_use", "tool_name": "edit", "activity_label": "Applying the fix", "parameters": {}}
+{"type": "tool_use", "tool_name": "edit", "activity_label": "Hardening related code paths", "parameters": {}}
+{"type": "tool_use", "tool_name": "write", "activity_label": "Adding regression tests", "parameters": {}}
+{"type": "tool_use", "tool_name": "shell", "activity_label": "Running pytest -q", "parameters": {}}
+{"type": "tool_use", "tool_name": "done", "activity_label": "Finalizing changes", "parameters": {}}
+{"type": "tool_use", "tool_name": "attempt_completion", "parameters": {"result": "## TASK SUMMARY\nFixed a SQL injection in the product search endpoint built via f-string.\n\n## CODE CHANGES\nReplaced f-string SQL with a parameterized SQLAlchemy query.\n\n## TESTS ADDED\nAdded 6 tests for injection payloads and normal search.\n\n## TEST RESULTS\n31 passed, 0 failed"}}
+{"type": "result", "status": "success", "stats": {"session_costs": 1.15, "input_tokens": 86000, "output_tokens": 3300, "duration_ms": 38000, "tool_calls": 14, "budget_spend": 1.15, "max_budget": 500}}

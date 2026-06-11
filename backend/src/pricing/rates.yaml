@@ -1,0 +1,115 @@
+# Default pricing structure. Values here are FALLBACK DEFAULTS — the
+# pricing calculator first looks at environment variables (loaded from
+# the project's top-level .env), so you can update rates without editing
+# this file.
+#
+# Environment variable overrides (see .env.example):
+#   BOB_USD_PER_BOBCOIN
+#   COPILOT_USD_PER_PREMIUM_REQUEST
+
+bob:
+  native_unit: bobcoin
+  usd_per_unit: 0.50            # 1 Bobcoin = $0.50 USD (confirmed)
+  usd_per_unit_env: BOB_USD_PER_BOBCOIN
+  extraction:
+    method: json_field
+    # In bob's --output-format json blob: stats.sessionCost
+    # In bob's --output-format stream-json final event: stats.session_costs
+    field_candidates:
+      - stats.sessionCost
+      - stats.session_costs
+  default_model: premium
+
+claude:
+  native_unit: usd
+  # Claude reports cost directly in USD — no conversion needed.
+  usd_per_unit: 1.0
+  extraction:
+    method: json_field
+    field_candidates:
+      - total_cost_usd
+  default_model: opus_4.7
+  reference_rates:
+    opus_4.7:    { input_per_mtok: 5.00, output_per_mtok: 25.00 }
+    sonnet_4.6:  { input_per_mtok: 3.00, output_per_mtok: 15.00 }
+    haiku_4.5:   { input_per_mtok: 0.80, output_per_mtok: 4.00 }
+
+copilot:
+  # GitHub Copilot moved to usage-based (token) billing on 2026-06-01.
+  # Cost = (input + cached + output) tokens × per-million-token rate
+  # for the model the request was routed through.
+  #
+  # GitHub bills these at the underlying-model API rates. Numbers below
+  # mirror the Anthropic / OpenAI / Google / xAI public API price lists
+  # as of May 2026 — verify before any customer demo. ALL values are
+  # env-overridable (see .env.example).
+  #
+  # Refs:
+  #   https://github.blog/news-insights/company-news/github-copilot-is-moving-to-usage-based-billing/
+  native_unit: token
+  default_model: claude-haiku-4.5
+
+  # Per-million-token rates per model (USD)
+  # input_per_mtok  — fresh input tokens
+  # output_per_mtok — generated tokens
+  # cached_per_mtok — cache-read input tokens (typically 10% of input rate
+  #   for Anthropic models; OpenAI prompt-caching is half the input rate)
+  model_rates:
+    claude-haiku-4.5:
+      input_per_mtok: 0.80
+      output_per_mtok: 4.00
+      cached_per_mtok: 0.08
+      env_prefix: COPILOT_RATE_CLAUDE_HAIKU_4_5
+    claude-sonnet-4.5:
+      input_per_mtok: 3.00
+      output_per_mtok: 15.00
+      cached_per_mtok: 0.30
+      env_prefix: COPILOT_RATE_CLAUDE_SONNET_4_5
+    claude-sonnet-4.6:
+      input_per_mtok: 3.00
+      output_per_mtok: 15.00
+      cached_per_mtok: 0.30
+      env_prefix: COPILOT_RATE_CLAUDE_SONNET_4_6
+    claude-opus-4.5:
+      input_per_mtok: 5.00
+      output_per_mtok: 25.00
+      cached_per_mtok: 0.50
+      env_prefix: COPILOT_RATE_CLAUDE_OPUS_4_5
+    claude-opus-4.6:
+      input_per_mtok: 5.00
+      output_per_mtok: 25.00
+      cached_per_mtok: 0.50
+      env_prefix: COPILOT_RATE_CLAUDE_OPUS_4_6
+    claude-opus-4.7:
+      input_per_mtok: 5.00
+      output_per_mtok: 25.00
+      cached_per_mtok: 0.50
+      env_prefix: COPILOT_RATE_CLAUDE_OPUS_4_7
+    gpt-4.1:        { input_per_mtok: 0.00,  output_per_mtok: 0.00,  cached_per_mtok: 0.00 }
+    gpt-4o:         { input_per_mtok: 0.00,  output_per_mtok: 0.00,  cached_per_mtok: 0.00 }
+    gpt-5-mini:     { input_per_mtok: 0.00,  output_per_mtok: 0.00,  cached_per_mtok: 0.00 }
+    gpt-5.2:
+      input_per_mtok: 1.25
+      output_per_mtok: 10.00
+      cached_per_mtok: 0.125
+      env_prefix: COPILOT_RATE_GPT_5_2
+    gpt-5.4:
+      input_per_mtok: 1.25
+      output_per_mtok: 10.00
+      cached_per_mtok: 0.125
+      env_prefix: COPILOT_RATE_GPT_5_4
+    gpt-5.4-mini:   { input_per_mtok: 0.25,  output_per_mtok: 2.00,  cached_per_mtok: 0.025 }
+    gpt-5.5:
+      input_per_mtok: 10.00
+      output_per_mtok: 40.00
+      cached_per_mtok: 1.00
+      env_prefix: COPILOT_RATE_GPT_5_5
+    gemini-2.5-pro: { input_per_mtok: 1.25,  output_per_mtok: 10.00, cached_per_mtok: 0.30 }
+    gemini-3-flash: { input_per_mtok: 0.075, output_per_mtok: 0.30,  cached_per_mtok: 0.02 }
+    grok-code-fast-1: { input_per_mtok: 0.20, output_per_mtok: 1.50, cached_per_mtok: 0.02 }
+
+  default_model_rate:
+    input_per_mtok: 1.25
+    output_per_mtok: 10.00
+    cached_per_mtok: 0.125
+    env_prefix: COPILOT_RATE_DEFAULT

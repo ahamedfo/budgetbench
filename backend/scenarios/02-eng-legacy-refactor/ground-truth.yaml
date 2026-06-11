@@ -1,0 +1,6 @@
+scenario_id: 02-eng-legacy-refactor
+title: "Legacy Order-Pricing Refactor"
+description: >
+  A 180-line legacy pricing module computes order totals and tiered discounts through deeply nested conditionals with no tests. Modernize it into clear, typed functions with identical behavior, and add a regression suite.
+objective:
+  type: refactor

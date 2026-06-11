@@ -1,0 +1,29 @@
+Review this codebase and complete the task. Start by listing the files in the current directory to understand the project structure, then proceed with the following steps:
+
+1. Identify any issues (security vulnerabilities, bugs, missing features,
+   or refactor opportunities) relevant to the task at hand.
+2. Make the necessary code changes using appropriate secure / idiomatic
+   patterns.
+3. Write at least 5 tests that verify your changes work (e.g., that
+   previously vulnerable code now safely handles malicious input, or
+   that a new feature behaves correctly).
+4. Run the full test suite to confirm everything still passes.
+5. At the end of your response, provide a structured summary with these
+   EXACT section headers (markdown level-2):
+
+   ## TASK SUMMARY
+   What the task required and what you did at a high level. For vulnerability
+   scenarios, list each issue (type, file path, line number). For feature /
+   refactor / bugfix tasks, describe what was missing / broken / messy.
+
+   ## CODE CHANGES
+   For each change: what you modified, why this approach is correct.
+
+   ## TESTS ADDED
+   List each new test you wrote and what it verifies.
+
+   ## TEST RESULTS
+   Output of running the full test suite (pass/fail counts).
+
+Be specific. Cite exact file paths and line numbers. Do not modify any
+files outside of the application code unless required for the task.

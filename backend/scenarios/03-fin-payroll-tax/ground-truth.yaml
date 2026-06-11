@@ -1,0 +1,6 @@
+scenario_id: 03-fin-payroll-tax
+title: "Payroll Tax-Bracket Bug"
+description: >
+  payroll.py applies the wrong marginal bracket at boundary incomes, overcharging employees by a few dollars near each threshold. Find the off-by-one in the bracket comparison and fix it, with tests on the boundaries.
+objective:
+  type: bug

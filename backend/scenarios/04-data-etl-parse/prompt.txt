@@ -1,0 +1,3 @@
+The ETL in `etl.py` loses rows with quoted commas and keeps currency columns as strings. Fix the parsing (use proper CSV quoting) and coerce numeric/currency columns, then add tests on dirty representative rows.
+
+End your response with these exact sections: ## TASK SUMMARY, ## CODE CHANGES, ## TESTS ADDED, ## TEST RESULTS.

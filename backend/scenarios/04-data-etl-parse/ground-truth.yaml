@@ -1,0 +1,6 @@
+scenario_id: 04-data-etl-parse
+title: "ETL CSV Parsing Failure"
+description: >
+  The nightly ETL drops rows containing quoted commas and mis-types currency columns as strings, silently corrupting the warehouse load. Fix the CSV ingestion and coerce types correctly, with tests on representative dirty data.
+objective:
+  type: bug

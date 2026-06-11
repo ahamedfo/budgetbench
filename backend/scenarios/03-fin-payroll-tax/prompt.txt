@@ -1,0 +1,3 @@
+There is an off-by-one bug in the marginal tax bracket logic in `payroll.py` that overcharges employees at incomes exactly on a bracket boundary. Find it, fix it, and add tests that cover each bracket boundary.
+
+End your response with these exact sections: ## TASK SUMMARY, ## CODE CHANGES, ## TESTS ADDED, ## TEST RESULTS.

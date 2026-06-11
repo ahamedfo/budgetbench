@@ -1,0 +1,9 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+{"type":"init","timestamp":"2026-05-12T20:42:36.355Z","session_id":"69475743-4c02-4bcd-a6bc-7517a9d2ba77","model":"premium"}
+{"type":"message","timestamp":"2026-05-12T20:42:36.355Z","role":"user","content":"Reply with the single word PONG"}
+{"type":"message","timestamp":"2026-05-12T20:42:38.355Z","role":"assistant","content":"PONG","delta":true}
+{"type":"message","timestamp":"2026-05-12T20:42:40.709Z","role":"assistant","content":"[using tool attempt_completion: Successfully completed | Cost: 0.09]\n","delta":true}
+{"type":"tool_use","timestamp":"2026-05-12T20:42:40.709Z","tool_name":"attempt_completion","tool_id":"tool-1","parameters":{"result":"\nPONG\n"}}
+{"type":"tool_result","timestamp":"2026-05-12T20:42:40.711Z","tool_id":"tool-1","status":"success","output":"\nPONG\n"}
+{"type":"result","timestamp":"2026-05-12T20:42:40.712Z","status":"success","stats":{"total_tokens":34918,"input_tokens":34886,"output_tokens":32,"duration_ms":4357,"session_costs":0.087294,"max_budget":500,"budget_spend":126.95,"tool_calls":1}}
+

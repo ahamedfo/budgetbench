@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Coding Agents Battle · Bob vs Claude vs Copilot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-title">
+    <img class="app-mark" src="/static/logos/bob.svg" alt="" />
+    <div>
+      <h1>Coding Agents Battle</h1>
+      <p class="hint">Side-by-side functional &amp; cost comparison of <strong>Bob</strong>, <strong>Claude Code</strong>, and <strong>GitHub Copilot</strong> on identical scenarios.</p>
+    </div>
+  </div>
+  <div class="topbar">
+    <label>
+      <span class="topbar-label">Scenario</span>
+      <select id="scenario-picker">
+        {% for s in scenarios %}
+          <option value="{{ s.id }}"
+                  data-title="{{ s.title }}"
+                  data-description="{{ s.description | replace('\n', ' ') }}"
+                  data-prompt="{{ s.prompt }}"
+                  data-type="{{ s.objective_type }}"
+                  data-verifications="{{ s.verifications | join(' · ') }}">{{ s.title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button id="run-btn">▶ Run bake-off</button>
+    <span id="status-pill" class="pill idle">Idle</span>
+    <button id="history-btn" class="secondary-btn" type="button">View past runs</button>
+  </div>
+
+  <section id="scenario-info" class="scenario-info" hidden>
+    <header class="scenario-info-head">
+      <div class="scenario-eyebrow-row">
+        <span class="scenario-eyebrow">Scenario</span>
+        <span class="scenario-type-tag" data-role="scenario-type"></span>
+      </div>
+      <h2 id="scenario-title"></h2>
+    </header>
+    <p id="scenario-description"></p>
+    <div class="scenario-verifications">
+      <span class="scenario-verif-label">Verifications:</span>
+      <span class="scenario-verif-list" data-role="scenario-verifications"></span>
+    </div>
+    <details class="scenario-prompt" open>
+      <summary>
+        <span class="prompt-icon">📝</span>
+        <span class="prompt-label">Prompt sent to each tool</span>
+      </summary>
+      <pre id="scenario-prompt"></pre>
+    </details>
+  </section>
+</header>
+
+<main>
+  <section class="columns" id="columns">
+    {% for tool, display in [("bob","Bob"),("claude","Claude"),("copilot","Copilot")] %}
+    <div class="col" data-tool="{{ tool }}">
+      <header class="col-head">
+        <img class="tool-logo" src="/static/logos/{{ tool }}.svg" alt="{{ display }}" />
+        <span class="tool-name-h">{{ display }}</span>
+        <span class="status idle" data-role="status">idle</span>
+        <span class="warn-badge" data-role="warn-badge" title="" hidden>⚠</span>
+        <span class="timer" data-role="timer">0.0s</span>
+      </header>
+
+      <div class="col-body">
+        <div class="bg-section" data-state="open" data-role="bg-section">
+          <button type="button" class="bg-toggle" data-role="bg-toggle">
+            <span class="caret"></span>
+            <span class="sec-icon">⚙</span>
+            <span class="sec-label">Background</span>
+          </button>
+          <div class="bg-stream" data-role="bg-stream"></div>
+        </div>
+
+        <div class="answer-section">
+          <div class="sec-head">
+            <span class="sec-icon">★</span>
+            <span class="sec-label">Answer</span>
+          </div>
+          <div class="answer-stream" data-role="answer-stream">
+            <div class="answer-placeholder" data-role="answer-placeholder">waiting…</div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="col-foot">
+        <div class="metric"><span class="label">Cost</span><span data-role="cost">—</span></div>
+        <div class="metric"><span class="label">Tokens</span><span data-role="tokens">—</span></div>
+        <div class="metric"><span class="label">Model</span><span data-role="model">—</span></div>
+      </footer>
+
+      <section class="summary" data-role="summary">
+        <div class="sec-head">
+          <span class="sec-icon">✓</span>
+          <span class="sec-label">Verification</span>
+        </div>
+        <div data-role="verification-body">
+          <div class="verif-grid">
+            <div class="k">Tests</div>             <div class="v dim">—</div>
+            <div class="k">New tests added</div>   <div class="v dim">—</div>
+            <div class="k">Semgrep</div>           <div class="v dim">—</div>
+            <div class="k">Forbidden patterns</div><div class="v dim">—</div>
+            <div class="k">Issue resolved</div>    <div class="v dim">—</div>
+            <div class="k">Lines changed</div>     <div class="v dim">—</div>
+            <div class="k">Files modified</div>    <div class="v dim">—</div>
+          </div>
+        </div>
+      </section>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section id="comparison" hidden>
+    <h2>Comparison</h2>
+    <div id="comparison-body"></div>
+  </section>
+
+  <section id="math-breakdown" hidden>
+    <h2>How we computed each cost</h2>
+    <div id="math-body" class="math-grid"></div>
+  </section>
+
+  <section id="diff-breakdown" hidden>
+    <h2>What each tool changed</h2>
+    <p class="section-hint">Unified <code>git diff</code> between the starting code and what the agent left behind. Click a header to expand.</p>
+    <div id="diff-body" class="math-grid"></div>
+  </section>
+
+  <section id="history" hidden>
+    <h2>Past runs</h2>
+    <div id="history-body"></div>
+  </section>
+</main>
+
+<script src="/static/diff_render.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

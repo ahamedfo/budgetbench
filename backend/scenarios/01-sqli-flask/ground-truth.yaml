@@ -1,0 +1,161 @@
+# ═══════════════════════════════════════════════════════════════════
+#  CANONICAL SCENARIO TEMPLATE — annotated.
+#
+#  This file is both:
+#    1. The ground-truth config for scenario 01-sqli-flask
+#    2. A teaching document. When you (or Bob) create a new scenario,
+#       copy this file and follow the inline comments below.
+#
+#  The harness reads ONLY the fields documented here. Anything else is
+#  ignored (you may add freeform metadata under `vulnerability:` etc.).
+# ═══════════════════════════════════════════════════════════════════
+
+
+# ─── REQUIRED — basic identity ──────────────────────────────────────
+
+# Folder name under scenarios/  (must match the directory).
+scenario_id: 01-sqli-flask
+
+# One-line title shown in the scenario picker dropdown and on the run
+# report header. Keep under ~60 chars for layout.
+title: "SQL Injection in Product Search API"
+
+# 2-3 sentences. Shown in the scenario info card under the picker.
+# Tell the audience: what the starting app is + what the tool must
+# accomplish. Use `>` for multi-line wrapping.
+description: >
+  A Flask + SQLAlchemy storefront with a search endpoint that builds its
+  SQL via f-string interpolation of a user-supplied query parameter —
+  classic SQL injection. The tool must find the vulnerable line, fix it
+  with parameterized queries (or the ORM), add tests proving the fix
+  works, and keep the existing test suite green.
+
+
+# ─── REQUIRED — objective type ──────────────────────────────────────
+#
+# Choose ONE. Renders as a colored pill next to the scenario title and
+# determines what verify.sh should assert. EVERY scenario uses the same
+# two mechanisms — pytest (auto-discovers everything under repo/tests/)
+# and verify.sh (binary pass/fail). The type only changes WHAT
+# verify.sh checks beyond pytest:
+#
+#   vulnerability  Starting code: tests pass, vuln present.
+#                  Tool: fix vuln + add regression test.
+#                  verify.sh: pytest + semgrep + forbidden_patterns gone.
+#                  YAML: SET semgrep_config + forbidden_patterns below.
+#
+#   feature        Starting code: tests pass, feature missing.
+#                  Tool: add feature + new pytest tests for it (in
+#                        repo/tests/ — pytest auto-discovers them).
+#                  verify.sh: pytest + a check that the new feature
+#                  exists (e.g., `python -c \"from app import api;
+#                  assert hasattr(api, 'export')\"`). The check MUST
+#                  fail on the starting code so verify.sh exits 1
+#                  before the tool acts.
+#                  YAML: OMIT semgrep_config + forbidden_patterns.
+#
+#   refactor       Starting code: tests pass, code is ugly/duplicated.
+#                  Tool: refactor — tests STILL pass (no behavior change).
+#                  verify.sh: pytest + forbidden_patterns gone (old code
+#                  shape that must be removed).
+#                  YAML: SET forbidden_patterns (the old shape regex).
+#
+#   bugfix         Starting code: tests pass but don't cover the bug.
+#                  Tool: add a failing test that demonstrates the bug,
+#                        then fix it so the new test passes.
+#                  verify.sh: pytest (the regression test now exists
+#                  and passes — that's the whole check).
+#                  YAML: OMIT semgrep_config + forbidden_patterns.
+#
+#   performance    Starting code: tests pass, code is slow.
+#                  Tool: optimize — tests STILL pass.
+#                  verify.sh: pytest + timing assertion (e.g., a
+#                  `time` block that fails if the run takes > N seconds).
+#                  YAML: OMIT semgrep_config + forbidden_patterns.
+#
+# Common to all: pytest auto-discovers EVERYTHING in repo/tests/. The
+# tool adds new test files to repo/tests/ — pytest picks them up with
+# zero config. verify.sh is the scenario-specific gate; the harness
+# trusts its exit code as the bottom-line `Issue resolved` verdict.
+objective:
+  type: vulnerability
+
+
+# ─── OPTIONAL — Semgrep static analysis ─────────────────────────────
+#
+# INCLUDE this key only when a Semgrep ruleset can catch the planted
+# issue. Typical use: vulnerability scenarios. Common ruleset values:
+#   p/python              broad Python security audit
+#   p/javascript          broad JS security audit
+#   p/owasp-top-ten       cross-language OWASP rules
+#   p/security-audit      multi-language general
+#   p/r2c-ci              R2C's CI default
+#
+# OMIT this key for non-security scenarios (feature, refactor, etc.).
+# The UI will show "Semgrep: — not run" and that check is skipped.
+semgrep_config: p/python
+
+
+# ─── OPTIONAL — Forbidden regex patterns ────────────────────────────
+#
+# After the tool finishes, the harness greps every .py file under repo/
+# for each pattern. Any match → "Forbidden patterns: ✗ still present"
+# and "Issue resolved: ✗ no".
+#
+# Use ONLY for vulnerability or refactor scenarios where a specific code
+# shape MUST disappear (the unsafe pattern, the deprecated API, etc.).
+# Patterns are Python regex strings — escape `(`, `[`, `{`, `.` etc.
+#
+# OMIT (or use []) for feature scenarios where nothing specific must be
+# removed. The UI will show "Forbidden patterns: — not configured".
+forbidden_patterns:
+  - 'f"[^"]*SELECT[^"]*\{'      # f-string SQL with interpolation
+  - 'f"[^"]*FROM[^"]*\{'        # other f-string SQL shapes
+  - "%s' % "                    # %-formatted SQL
+  - '\.format\('                # .format()-interpolated SQL
+
+
+# ─── OPTIONAL — freeform metadata (NOT read by the harness) ─────────
+#
+# Anything under this block is for documentation only — the verifier
+# ignores it. Use to record CWE, file paths, links to the planted bug
+# for reviewers / auditors who open the YAML directly.
+vulnerability:
+  cwe: CWE-89
+  file: app/routes/products.py
+  function: search_products
+  semgrep_rules:
+    - python.flask.security.injection.tainted-sql-string.tainted-sql-string
+    - python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  CHECKLIST (verifies the scenario is "harness-ready"):
+#
+#  □  scenarios/<id>/repo/pyproject.toml   has [tool.pytest.ini_options]
+#  □  scenarios/<id>/repo/tests/           all pass on the STARTING code
+#  □  scenarios/<id>/prompt.txt            ends with these 4 ## headers
+#                                          (these names are generic — they
+#                                          work for any scenario type;
+#                                          the parser also accepts the
+#                                          legacy ## VULNERABILITIES FOUND
+#                                          / ## FIXES APPLIED variants, as
+#                                          well as ## ISSUES FOUND):
+#         ## TASK SUMMARY
+#         ## CODE CHANGES
+#         ## TESTS ADDED
+#         ## TEST RESULTS
+#  □  scenarios/<id>/verify.sh             exits 0 only when the task is
+#                                          correctly done (pytest + any
+#                                          task-specific check)
+#  □  This ground-truth.yaml                title, description, objective.type
+#                                          filled; semgrep_config and
+#                                          forbidden_patterns included only
+#                                          when applicable.
+#
+#  Validate:
+#     cd scenarios/<id>/repo && python -m pytest -q     # must pass
+#     cd scenarios/<id> && bash verify.sh               # must FAIL before
+#                                                       # the task is done,
+#                                                       # PASS after.
+# ═══════════════════════════════════════════════════════════════════

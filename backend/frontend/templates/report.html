@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Run {{ run_id }} — Coding Agents Battle</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-title">
+    <img class="app-mark" src="/static/logos/bob.svg" alt="" />
+    <div class="report-title-block">
+      <span class="report-eyebrow">Run report
+        {% if scenario %}· <span class="report-scenario-title">{{ scenario.title }}</span>{% endif %}
+      </span>
+      <h1>{{ scenario.title if scenario else 'Run report' }}</h1>
+      <p class="hint">
+        {% if scenario %}<span>{{ scenario.id }}</span> · {% endif %}
+        Run ID: <code>{{ run_id }}</code>
+      </p>
+    </div>
+    <a href="/" class="secondary-btn">← New run</a>
+  </div>
+</header>
+
+<main>
+{% if not rows %}
+  <p class="hint">This run has no persisted results yet.</p>
+{% else %}
+
+  {# ── Columns: the three tools' answers + verification ── #}
+  <section class="columns">
+  {% for r in rows %}
+    {% set extras = r.extras_json | from_json if r.extras_json else {} %}
+    {% set display_model = display_model_for_row(r.tool, r.model, extras) %}
+    {% set summary = r.summary_json | from_json if r.summary_json else {} %}
+    {% set verif = r.verification_json | from_json if r.verification_json else {} %}
+    {% set passed = r.exit_code == 0 and not (r.error or '').strip() %}
+    <div class="col" data-tool="{{ r.tool }}">
+
+      <header class="col-head">
+        <img class="tool-logo" src="/static/logos/{{ r.tool }}.svg" alt="{{ r.tool }}" />
+        <span class="tool-name-h">{{ r.tool | capitalize }}</span>
+        <span class="status {{ 'complete' if passed else 'warn' }}">
+          {{ 'complete' if passed else 'failed' }}
+        </span>
+        {% if r.error %}
+          <span class="warn-badge" title="{{ r.error }}">⚠</span>
+        {% endif %}
+        <span class="timer">{{ '%.1f' % ((r.wall_clock_ms or 0) / 1000) }}s</span>
+      </header>
+
+      <div class="col-body">
+        <div class="answer-section" style="flex:1 1 100%;">
+          <div class="sec-head">
+            <span class="sec-icon">★</span>
+            <span class="sec-label">Answer</span>
+          </div>
+          <div class="answer-stream">
+          {% set has_section = (summary.get('vulnerabilities_found') or '').strip() or
+                               (summary.get('fixes_applied') or '').strip() or
+                               (summary.get('tests_added') or '').strip() or
+                               (summary.get('test_results') or '').strip() %}
+          {% if r.error %}
+            <div class="rate-limit-note">
+              <div class="rl-icon">⚠</div>
+              <div class="rl-title">Run failed</div>
+              <div class="rl-body">{{ r.error }}</div>
+            </div>
+          {% elif not has_section %}
+            <div class="answer-placeholder">No structured summary in response.</div>
+          {% else %}
+            {% set sections = [
+              ('Task summary', 'vulnerabilities_found'),
+              ('Code changes', 'fixes_applied'),
+              ('Tests added',  'tests_added'),
+              ('Test results', 'test_results'),
+            ] %}
+            {% for label, key in sections %}
+              {% if (summary.get(key) or '').strip() %}
+                <details class="sec-card" {% if key == 'vulnerabilities_found' %}open{% endif %}>
+                  <summary>{{ label }}</summary>
+                  <pre>{{ summary.get(key).strip() }}</pre>
+                </details>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <footer class="col-foot">
+        <div class="metric"><span class="label">Cost</span>
+          <span>${{ '%.4f' % (r.usd_cost or 0) }}</span></div>
+        <div class="metric"><span class="label">Tokens</span>
+          <span>{{ r.input_tokens | thousand_sep }} / {{ r.output_tokens | thousand_sep }}</span></div>
+        <div class="metric"><span class="label">Model</span><span>{{ display_model }}</span></div>
+      </footer>
+
+      <section class="summary">
+        <div class="sec-head">
+          <span class="sec-icon">✓</span>
+          <span class="sec-label">Verification</span>
+        </div>
+        {% if verif %}
+          <div class="verif-grid">
+            <div class="k">Tests</div>
+              <div class="v {{ 'ok' if verif.tests_failed == 0 and verif.tests_total > 0 else 'fail' }}">
+                {{ verif.tests_passed }}/{{ verif.tests_total }} passed, {{ verif.tests_failed }} failed
+              </div>
+            <div class="k">New tests added</div><div class="v">{{ verif.new_tests_added }}</div>
+            <div class="k">Semgrep</div>
+              {% if verif.semgrep_ran %}
+                <div class="v {{ 'ok' if verif.semgrep_findings_total == 0 else 'fail' }}">
+                  {{ verif.semgrep_findings_total }} ({{ verif.semgrep_findings_high }} high)
+                </div>
+              {% else %}
+                <div class="v dim">— not run</div>
+              {% endif %}
+            <div class="k">Forbidden patterns</div>
+              {% if verif.forbidden_patterns_configured %}
+                <div class="v {{ 'ok' if not verif.vuln_pattern_still_present else 'fail' }}">
+                  {{ '✓ all clear' if not verif.vuln_pattern_still_present else '✗ still present' }}
+                </div>
+              {% else %}
+                <div class="v dim">— not configured</div>
+              {% endif %}
+            {% set fp_ok = (not verif.forbidden_patterns_configured) or (not verif.vuln_pattern_still_present) %}
+            {% set resolved = verif.verify_sh_passed and fp_ok %}
+            <div class="k">Issue resolved</div>
+              <div class="v {{ 'ok' if resolved else 'fail' }}">
+                {{ '✓ yes' if resolved else '✗ no' }}
+              </div>
+            <div class="k">Lines changed</div><div class="v">{{ verif.lines_changed }}</div>
+            <div class="k">Files modified</div>
+              <div class="v">{{ (verif.files_modified or [])[:3] | join(', ') or '—' }}</div>
+          </div>
+        {% else %}
+          <div class="hint" style="font-size:11px;">No verification data.</div>
+        {% endif %}
+      </section>
+    </div>
+  {% endfor %}
+  </section>
+
+  {# ── Math breakdown: one card per tool with the actual formula ── #}
+  <section id="math-breakdown">
+    <h2>How we computed each cost</h2>
+    <div class="math-grid">
+      {% for r in rows %}
+        {% set extras = r.extras_json | from_json if r.extras_json else {} %}
+        {% set p = extras.get('pricing') or {} %}
+        {% set rb = p.get('rate_breakdown') or {} %}
+        {% set display_model = display_model_for_row(r.tool, r.model, extras) %}
+        <div class="math-card" data-tool="{{ r.tool }}">
+          <header class="math-head">
+            <img class="tool-logo" src="/static/logos/{{ r.tool }}.svg" alt="{{ r.tool }}" />
+            <span class="math-tool">{{ display_model }}</span>
+            <span class="math-cost">${{ '%.4f' % (r.usd_cost or 0) }}</span>
+          </header>
+          <div class="math-body">
+            {% if r.tool == 'bob' %}
+              {% set coins = p.get('native_value') or r.native_cost_value or 0 %}
+              {% set rate = p.get('usd_per_unit') or 0 %}
+              <div class="math-line">
+                <span class="math-label">Self-reported by Bob</span>
+                <span class="math-val">{{ '%.4f' % coins }} Bobcoins</span>
+              </div>
+              <div class="math-line">
+                <span class="math-label">Rate</span>
+                <span class="math-val">${{ '%.2f' % rate }} / Bobcoin</span>
+              </div>
+              <div class="math-eq">
+                {{ '%.4f' % coins }} × ${{ '%.2f' % rate }} =
+                <strong class="math-total">${{ '%.4f' % (r.usd_cost or 0) }}</strong>
+              </div>
+              <div class="math-links">
+                <a class="math-link" href="https://bob.ibm.com/pricing" target="_blank" rel="noopener">
+                  ↗ Bob pricing (FAQ)
+                </a>
+              </div>
+
+            {% elif r.tool == 'claude' %}
+              <div class="math-line">
+                <span class="math-label">Self-reported by Claude</span>
+                <span class="math-val">${{ '%.4f' % (r.usd_cost or 0) }} USD (sum of all internal model usage)</span>
+              </div>
+              {% set mu = extras.get('model_usage') or {} %}
+              {% if mu %}
+                <div class="math-breakdown-sub">
+                  <div class="math-dim">Breakdown:</div>
+                  {% for m, v in mu.items() %}
+                    {% if v and (v.get('costUSD') or 0) > 0 %}
+                      <div class="math-sub">{{ m }} · ${{ '%.4f' % v.costUSD }}</div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <div class="math-eq">
+                Total = <strong class="math-total">${{ '%.4f' % (r.usd_cost or 0) }}</strong>
+              </div>
+              <div class="math-links">
+                <a class="math-link" href="https://docs.anthropic.com/en/docs/about-claude/pricing" target="_blank" rel="noopener">
+                  ↗ Anthropic {{ display_model }} rates
+                </a>
+              </div>
+
+            {% elif r.tool == 'copilot' %}
+              {% set in_t = rb.get('input_tokens') or r.input_tokens or 0 %}
+              {% set out_t = rb.get('output_tokens') or r.output_tokens or 0 %}
+              {% set ca_t = rb.get('cached_tokens') or r.cached_tokens or 0 %}
+              {% set in_r = rb.get('input_per_mtok') or 0 %}
+              {% set out_r = rb.get('output_per_mtok') or 0 %}
+              {% set ca_r = rb.get('cached_per_mtok') or 0 %}
+              {% set in_c = in_t / 1000000 * in_r %}
+              {% set out_c = out_t / 1000000 * out_r %}
+              {% set ca_c = ca_t / 1000000 * ca_r %}
+              {% set priced_as = (p.get('priced_as_model') or r.model or '') | lower %}
+              {% if priced_as.startswith('claude') or priced_as.startswith('anthropic') %}
+                {% set provider_name = 'Anthropic' %}{% set provider_url = 'https://docs.anthropic.com/en/docs/about-claude/pricing' %}
+              {% elif priced_as.startswith('gpt') or priced_as.startswith('o1') or priced_as.startswith('o3') %}
+                {% set provider_name = 'OpenAI' %}{% set provider_url = 'https://openai.com/api/pricing/' %}
+              {% elif priced_as.startswith('gemini') %}
+                {% set provider_name = 'Google' %}{% set provider_url = 'https://ai.google.dev/pricing' %}
+              {% elif priced_as.startswith('grok') or priced_as.startswith('x.ai') %}
+                {% set provider_name = 'xAI' %}{% set provider_url = 'https://x.ai/api' %}
+              {% else %}
+                {% set provider_name = '' %}{% set provider_url = '' %}
+              {% endif %}
+              <div class="math-line">
+                <span class="math-label">Self-reported by Copilot</span>
+                <span class="math-val">{{ extras.get('premium_requests') if extras.get('premium_requests') is not none else '—' }} premium req · {{ out_t | thousand_sep }} output tok</span>
+              </div>
+              <div class="math-line">
+                <span class="math-label">Input</span>
+                <span class="math-val">{{ in_t | thousand_sep }} tok × ${{ '%.2f' % in_r }} / 1M = ${{ '%.4f' % in_c }}</span>
+              </div>
+              <div class="math-line">
+                <span class="math-label">Output</span>
+                <span class="math-val">{{ out_t | thousand_sep }} tok × ${{ '%.2f' % out_r }} / 1M = ${{ '%.4f' % out_c }}</span>
+              </div>
+              <div class="math-line">
+                <span class="math-label">Cached</span>
+                <span class="math-val">{{ ca_t | thousand_sep }} tok × ${{ '%.2f' % ca_r }} / 1M = ${{ '%.4f' % ca_c }}</span>
+              </div>
+              <div class="math-eq">
+                Total = <strong class="math-total">${{ '%.4f' % (r.usd_cost or 0) }}</strong>
+              </div>
+              <div class="math-links">
+                <a class="math-link"
+                   href="https://docs.github.com/en/copilot/managing-copilot/monitoring-usage-and-entitlements/about-premium-requests"
+                   target="_blank" rel="noopener">↗ Copilot multipliers</a>
+                {% if provider_url %}
+                <a class="math-link" href="{{ provider_url }}" target="_blank" rel="noopener">
+                  ↗ {{ provider_name }} {{ display_model }} rates
+                </a>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ── Per-tool git diff cards (rendered client-side by diff_render.js) ── #}
+  <section id="diff-breakdown">
+    <h2>What each tool changed</h2>
+    <p class="section-hint">Unified <code>git diff</code> between the starting code and what the agent left behind. Click a header to expand.</p>
+    <div class="math-grid">
+      {% for r in rows %}
+        {% set verif = r.verification_json | from_json if r.verification_json else {} %}
+        {% set files = (verif.files_modified or []) %}
+        {% set lines = verif.lines_changed if verif.lines_changed is defined else 0 %}
+        {% set diff_text = verif.diff_text or '' %}
+        <details class="math-card diff-card" data-tool="{{ r.tool }}">
+          <summary class="math-head">
+            <img class="tool-logo" src="/static/logos/{{ r.tool }}.svg" alt="{{ r.tool }}" />
+            <span class="math-tool">{{ r.tool | capitalize }}</span>
+            <span class="diff-badge">
+              {%- if files -%}
+                {{ files | length }} file{{ '' if (files | length) == 1 else 's' }} · {{ lines }} line{{ '' if lines == 1 else 's' }}
+              {%- else -%}
+                no changes
+              {%- endif -%}
+            </span>
+            <span class="diff-chev">▾</span>
+          </summary>
+          <div class="math-body" data-diff-target>
+            {# Use tojson so we get a properly JSON-encoded string. Plain
+               Jinja escaping into a <script> tag double-encodes (entities
+               are not decoded inside <script> per HTML spec), which shows
+               up as literal &#34; / &#39; in the diff content. #}
+            <script type="application/json" class="diff-data">{{ diff_text | tojson }}</script>
+            <div class="diff-empty">Loading diff…</div>
+          </div>
+        </details>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+<script src="/static/diff_render.js"></script>
+<script>
+  // Replace each placeholder with the rendered diff using the shared renderer.
+  // The diff text is JSON-encoded by Jinja's `| tojson` filter so it survives
+  // unchanged through the <script> tag — including embedded quotes that
+  // would otherwise get HTML-entity'd and double-rendered.
+  document.querySelectorAll('[data-diff-target]').forEach(el => {
+    const slot = el.querySelector('script.diff-data');
+    let text = "";
+    if (slot) {
+      try { text = JSON.parse(slot.textContent); } catch (_) { text = ""; }
+    }
+    el.innerHTML = window.DiffRender.render(text);
+  });
+</script>
+</main>
+</body>
+</html>
