@@ -36,6 +36,7 @@ export const api = {
     jget(`/api/analytics/executive?period=${encodeURIComponent(period)}`),
   efficiency: () => jget("/api/analytics/efficiency"),
   departmentDetail: (id) => jget(`/api/analytics/department/${id}`),
+  averages: () => jget("/api/analytics/averages"),
 };
 
 // SSE stream URL for one tool of a run (hit backend directly).

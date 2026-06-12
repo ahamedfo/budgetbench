@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useRun } from "../lib/useRun";
 import { project } from "../lib/projection";
@@ -12,6 +12,7 @@ import MethodologyPanel from "../components/MethodologyPanel";
 import EfficiencySection from "../components/EfficiencySection";
 import ForecastAlerts from "../components/ForecastAlerts";
 import DeptDrilldown from "../components/DeptDrilldown";
+import RunsDatabase from "../components/RunsDatabase";
 import SpendTrendChart from "../components/charts/SpendTrendChart";
 import DeptBudgetChart from "../components/charts/DeptBudgetChart";
 import CostShareDonut from "../components/charts/CostShareDonut";
@@ -40,11 +41,43 @@ function ChartCard({ title, sub, children }) {
   );
 }
 
+// Projection views live here, clearly labeled: this modeling is Planning
+// Analytics' job — the web app's deliverable is run → collect → store.
+function PaPreviewBand({ children }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <section className="border border-carbon-border rounded-xl overflow-hidden">
+      <div className="bg-[#161616] text-white px-5 py-4 flex items-center justify-between gap-4">
+        <div>
+          <div className="font-semibold">
+            Projection Preview{" "}
+            <span className="text-white/50 font-normal">— this modeling moves to IBM Planning Analytics</span>
+          </div>
+          <div className="text-sm text-white/60 mt-0.5">
+            The Runs Database above is the dataset PA ingests. These views preview what PA will model:
+            cost over time, budget utilization, and scaling by users and months.
+          </div>
+        </div>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="shrink-0 border border-white/20 px-3 py-1.5 text-xs rounded-lg hover:bg-white/10 transition-colors"
+        >
+          {open ? "Collapse" : "Expand"}
+        </button>
+      </div>
+      {open && <div className="p-5 space-y-7 bg-white">{children}</div>}
+    </section>
+  );
+}
+
 export default function UnifiedDashboard() {
   const period = currentPeriod();
   const [exec, setExec] = useState(null);
   const [departmentId, setDepartmentId] = useState("");
-  const [runMode, setRunMode] = useState("simulated");
+  const [runMode, setRunMode] = useState("live");
+  const [repeat, setRepeat] = useState(1);
+  const [batchInfo, setBatchInfo] = useState(null); // {current, total} during ×N batches
+  const [dbRefresh, setDbRefresh] = useState(0); // bump → RunsDatabase refetches
   const [selected, setSelected] = useState(null); // agent to standardize on
   const [overrides, setOverrides] = useState({}); // {deptId: {tool: usd}} from live races
   const [raceDeptId, setRaceDeptId] = useState(null);
@@ -88,6 +121,16 @@ export default function UnifiedDashboard() {
         .sort((a, b) => a[1].row.usd_cost - b[1].row.usd_cost);
       if (ranked[0]) setSelected(ranked[0][0]);
       load();
+      setDbRefresh((x) => x + 1);
+      // ×N batch: chain the next run after a short beat so the UI can settle.
+      setBatchInfo((b) => {
+        if (b && b.current < b.total) {
+          const next = { current: b.current + 1, total: b.total };
+          setTimeout(() => startRunRef.current && startRunRef.current(), 700);
+          return next;
+        }
+        return null;
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
@@ -103,15 +146,25 @@ export default function UnifiedDashboard() {
 
   const proj = useMemo(() => project({ departments, selected }), [departments, selected]);
 
+  const scenarioTitles = useMemo(
+    () => Object.fromEntries(departments.map((d) => [d.scenario_id, d.scenario_title])),
+    [departments]
+  );
+
   const selectedDept = departments.find((d) => String(d.department_id) === String(departmentId));
   const running = phase === "running";
+  // busy spans an entire ×N batch (including the brief idle gap between runs).
+  const busy = running || batchInfo !== null;
 
   const runTotal = useMemo(() => {
     const vals = Object.values(tools).map((t) => t.row?.usd_cost).filter((v) => v != null);
     return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
   }, [tools]);
 
-  const launch = () => {
+  // Launch one run with the current selections. Kept in a ref so the batch
+  // chain (inside the phase effect) always calls the latest version.
+  const startRunRef = useRef(null);
+  const startRun = () => {
     if (!selectedDept) return;
     setRaceDeptId(selectedDept.department_id);
     start({
@@ -120,6 +173,13 @@ export default function UnifiedDashboard() {
       department_id: selectedDept.department_id,
       submitter: "demo@ibm.com",
     });
+  };
+  startRunRef.current = startRun;
+
+  const launch = () => {
+    if (!selectedDept) return;
+    setBatchInfo(repeat > 1 ? { current: 1, total: repeat } : null);
+    startRun();
   };
 
   // Kiosk/demo auto-launch.
@@ -165,17 +225,22 @@ export default function UnifiedDashboard() {
         <div className="panel p-5">
           <div className="flex flex-wrap items-end gap-5">
             <Field label="Department">
-              <Select className="min-w-[170px]" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} disabled={running}>
+              <Select className="min-w-[170px]" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} disabled={busy}>
                 {departments.map((d) => (
                   <option key={d.department_id} value={d.department_id}>{d.department}</option>
                 ))}
               </Select>
             </Field>
             <Field label="Mode">
-              <Select className="min-w-[140px]" value={runMode} onChange={(e) => setRunMode(e.target.value)} disabled={running}>
+              <Select className="min-w-[140px]" value={runMode} onChange={(e) => setRunMode(e.target.value)} disabled={busy}>
+                <option value="live">Live</option>
                 <option value="simulated">Simulated</option>
                 <option value="replay">Replay</option>
-                <option value="live">Live (needs CLIs)</option>
+              </Select>
+            </Field>
+            <Field label="Runs">
+              <Select className="min-w-[90px]" value={repeat} onChange={(e) => setRepeat(Number(e.target.value))} disabled={busy}>
+                {[1, 3, 5, 10, 20].map((n) => <option key={n} value={n}>×{n}</option>)}
               </Select>
             </Field>
             <div className="ml-auto flex items-center gap-5">
@@ -185,11 +250,18 @@ export default function UnifiedDashboard() {
                   <div className="metric-num text-xl font-semibold">{usd(runTotal)}</div>
                 </div>
               )}
-              <button className="btn-primary" onClick={launch} disabled={running}>
-                {running ? "Running…" : "▶  Run this task"}
+              <button className="btn-primary" onClick={launch} disabled={busy}>
+                {busy
+                  ? batchInfo ? `Running ${batchInfo.current} of ${batchInfo.total}…` : "Running…"
+                  : repeat > 1 ? `▶  Run ×${repeat}` : "▶  Run this task"}
               </button>
             </div>
           </div>
+          {runMode === "live" && (
+            <p className="text-xs text-carbon-subtle mt-2">
+              Live runs call the real agent APIs and spend real credits (typically $0.50–$3 per agent per run).
+            </p>
+          )}
 
           {/* The department's representative task */}
           <div className="mt-4 pt-4 border-t border-carbon-border">
@@ -224,57 +296,60 @@ export default function UnifiedDashboard() {
         </p>
       </section>
 
-      {/* ---- STATUS BANNER ---- */}
-      <div className={`rounded-xl border-l-4 px-5 py-4 ${k.on_track ? "bg-carbon-green/[0.08] border-carbon-green" : "bg-carbon-red/[0.08] border-carbon-red"}`}>
-        <div className="flex items-center gap-3">
-          <span className={`text-xl ${k.on_track ? "text-carbon-green" : "text-carbon-red"}`}>{k.on_track ? "✓" : "!"}</span>
-          <div>
-            <div className="font-semibold">{k.on_track ? "Budget On Track" : "Over Budget"}</div>
-            <div className="text-sm text-carbon-subtle">
-              Standardizing on <span className="font-medium text-carbon-text">{selLabel}</span> projects{" "}
-              {usd0(k.projected_monthly_usd)}/mo across all departments against a {usd0(k.total_budget_usd)} budget — {pct(k.budget_utilization)} utilized.
+      {/* ---- THE DELIVERABLE: every run captured + stored ---- */}
+      <RunsDatabase refreshKey={dbRefresh} scenarioTitles={scenarioTitles} />
+
+      <EfficiencySection refreshKey={dbRefresh} />
+
+      {/* ---- PROJECTIONS: Planning Analytics' job; shown here as a preview ---- */}
+      <PaPreviewBand>
+        <div className={`rounded-xl border-l-4 px-5 py-4 ${k.on_track ? "bg-carbon-green/[0.08] border-carbon-green" : "bg-carbon-red/[0.08] border-carbon-red"}`}>
+          <div className="flex items-center gap-3">
+            <span className={`text-xl ${k.on_track ? "text-carbon-green" : "text-carbon-red"}`}>{k.on_track ? "✓" : "!"}</span>
+            <div>
+              <div className="font-semibold">{k.on_track ? "Budget On Track" : "Over Budget"}</div>
+              <div className="text-sm text-carbon-subtle">
+                Standardizing on <span className="font-medium text-carbon-text">{selLabel}</span> projects{" "}
+                {usd0(k.projected_monthly_usd)}/mo across all departments against a {usd0(k.total_budget_usd)} budget — {pct(k.budget_utilization)} utilized.
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ---- KPI ROW ---- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Projected Annual Spend" value={k.projected_annual_usd} format={usd0}
-          delta={`${pct(k.savings_pct)} vs ${baseLabel}`} deltaPositive sub={`On ${selLabel} · ${int(k.monthly_task_volume)} tasks/mo`} />
-        <KpiCard label="Annual Savings" value={k.savings_annual_usd} format={usd0}
-          delta={`${usd0(k.savings_monthly_usd)}/mo`} deltaPositive sub={`vs most expensive agent (${baseLabel})`} />
-        <KpiCard label="Monthly Burn Rate" value={k.projected_monthly_usd} format={usd0}
-          sub={`of ${usd0(k.total_budget_usd)} monthly budget`} />
-        <KpiCard label="Budget Remaining" value={k.budget_remaining_usd} format={usd0}
-          sub={`${pct(1 - (k.budget_utilization || 0))} available this period`} />
-      </div>
-
-      {/* ---- CHARTS ---- */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Monthly Spend Trend" sub={`${baseLabel} baseline vs. ${selLabel} (selected)`}>
-          <SpendTrendChart trend={proj.trend} baselineLabel={baseLabel} recLabel={selLabel} />
-        </ChartCard>
-        <ChartCard title="Department Budget vs. Projected" sub="Planning Analytics budget vs. projected agent spend">
-          <DeptBudgetChart departments={proj.departments} />
-        </ChartCard>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Projected Spend by Department" sub="Share of monthly AI-agent spend">
-          <CostShareDonut data={proj.cost_share} />
-        </ChartCard>
-        <div className="space-y-3">
-          <div className="font-medium">Agent Comparison <span className="text-carbon-subtle text-sm font-normal">— click to standardize</span></div>
-          <AgentComparison agents={proj.agents} selected={proj.selected} onSelect={setSelected} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard label="Projected Annual Spend" value={k.projected_annual_usd} format={usd0}
+            delta={`${pct(k.savings_pct)} vs ${baseLabel}`} deltaPositive sub={`On ${selLabel} · ${int(k.monthly_task_volume)} tasks/mo`} />
+          <KpiCard label="Annual Savings" value={k.savings_annual_usd} format={usd0}
+            delta={`${usd0(k.savings_monthly_usd)}/mo`} deltaPositive sub={`vs most expensive agent (${baseLabel})`} />
+          <KpiCard label="Monthly Burn Rate" value={k.projected_monthly_usd} format={usd0}
+            sub={`of ${usd0(k.total_budget_usd)} monthly budget`} />
+          <KpiCard label="Budget Remaining" value={k.budget_remaining_usd} format={usd0}
+            sub={`${pct(1 - (k.budget_utilization || 0))} available this period`} />
         </div>
-      </div>
 
-      <EfficiencySection />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartCard title="Monthly Spend Trend" sub={`${baseLabel} baseline vs. ${selLabel} (selected)`}>
+            <SpendTrendChart trend={proj.trend} baselineLabel={baseLabel} recLabel={selLabel} />
+          </ChartCard>
+          <ChartCard title="Department Budget vs. Projected" sub="Planning Analytics budget vs. projected agent spend">
+            <DeptBudgetChart departments={proj.departments} />
+          </ChartCard>
+        </div>
 
-      <ForecastAlerts proj={proj} selectedLabel={selLabel} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartCard title="Projected Spend by Department" sub="Share of monthly AI-agent spend">
+            <CostShareDonut data={proj.cost_share} />
+          </ChartCard>
+          <div className="space-y-3">
+            <div className="font-medium">Agent Comparison <span className="text-carbon-subtle text-sm font-normal">— click to standardize</span></div>
+            <AgentComparison agents={proj.agents} selected={proj.selected} onSelect={setSelected} />
+          </div>
+        </div>
 
-      <DeptDrilldown proj={proj} selectedLabel={selLabel} />
+        <ForecastAlerts proj={proj} selectedLabel={selLabel} />
+
+        <DeptDrilldown proj={proj} selectedLabel={selLabel} />
+      </PaPreviewBand>
 
       <MethodologyPanel />
     </div>

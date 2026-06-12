@@ -28,9 +28,27 @@ function sniff(tool, line) {
   }
   const out = {};
   // A short human label of what's happening, for the activity ticker.
+  // Live Claude emits assistant events whose message.content[] carries
+  // tool_use blocks with a `name` (Read/Edit/Bash/…); recordings carry an
+  // explicit activity_label. Fall back to the raw event type.
+  let liveToolName = null;
+  const content = obj.message && obj.message.content;
+  if (Array.isArray(content)) {
+    const tu = content.find((c) => c && c.type === "tool_use" && c.name);
+    if (tu) {
+      liveToolName = tu.name;
+      const input = tu.input || {};
+      const target = input.file_path || input.path || input.command || input.pattern;
+      if (target) {
+        const short = String(target).split("/").pop().slice(0, 40);
+        liveToolName = `${tu.name} · ${short}`;
+      }
+    }
+  }
   const label =
     obj.activity_label ||
     (obj.data && obj.data.activity_label) ||
+    liveToolName ||
     (obj.tool_name && obj.tool_name !== "attempt_completion" ? obj.tool_name : null);
   if (label) {
     out.activity = String(label);

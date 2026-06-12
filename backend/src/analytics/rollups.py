@@ -204,6 +204,42 @@ def cost_timeline(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def averages(conn: sqlite3.Connection) -> list[dict]:
+    """Per (scenario, tool): run count, avg USD, avg tokens, avg duration,
+    pass rate. This is the aggregated dataset Planning Analytics ingests to
+    model projections (e.g. avg cost/task × users × months)."""
+    rows = conn.execute(
+        """
+        SELECT scenario_id, tool, usd_cost, input_tokens, output_tokens,
+               COALESCE(duration_ms, wall_clock_ms) AS dur_ms, verification_json
+        FROM runs
+        """
+    ).fetchall()
+    agg: dict[tuple, dict] = {}
+    for r in rows:
+        key = (r["scenario_id"], r["tool"])
+        a = agg.setdefault(key, {"usd": 0.0, "tok": 0, "dur": 0, "n": 0, "passed": 0})
+        a["usd"] += r["usd_cost"] or 0.0
+        a["tok"] += (r["input_tokens"] or 0) + (r["output_tokens"] or 0)
+        a["dur"] += r["dur_ms"] or 0
+        a["n"] += 1
+        if _verify_passed(r["verification_json"]):
+            a["passed"] += 1
+    out = []
+    for (scenario, tool), a in agg.items():
+        n = a["n"]
+        out.append({
+            "scenario_id": scenario,
+            "tool": tool,
+            "runs": n,
+            "avg_usd": round(a["usd"] / n, 6),
+            "avg_tokens": round(a["tok"] / n),
+            "avg_duration_ms": round(a["dur"] / n),
+            "pass_rate": round(a["passed"] / n, 4),
+        })
+    return sorted(out, key=lambda x: (x["scenario_id"], x["avg_usd"]))
+
+
 def agent_efficiency(conn: sqlite3.Connection) -> list[dict]:
     """Per-agent operations metrics: time/task, tokens/task, token mix, $/task,
     and tokens-per-dollar (efficiency). Uses agent-reported duration where

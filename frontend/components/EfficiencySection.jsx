@@ -24,11 +24,11 @@ function TokenMix({ input, output, cached }) {
   );
 }
 
-export default function EfficiencySection() {
+export default function EfficiencySection({ refreshKey }) {
   const [rows, setRows] = useState([]);
   useEffect(() => {
     api.efficiency().then(setRows).catch(() => {});
-  }, []);
+  }, [refreshKey]);
   if (rows.length === 0) return null;
 
   // Best (highest) tokens-per-dollar gets a subtle highlight.

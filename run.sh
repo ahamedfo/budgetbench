@@ -11,6 +11,10 @@ if [[ "${1:-}" == "--setup" ]]; then
   uv venv --directory "$BACKEND" .venv --python 3.11
   uv pip install --directory "$BACKEND" --python "$BACKEND/.venv/bin/python" -e "$BACKEND"
   uv pip install --directory "$BACKEND" --python "$BACKEND/.venv/bin/python" pytest pytest-asyncio
+  # Scenario + verification deps: live runs execute the scenario's test suite
+  # (pytest/flask) and semgrep against each agent's working copy.
+  uv pip install --directory "$BACKEND" --python "$BACKEND/.venv/bin/python" \
+    flask flask-sqlalchemy flask-login sqlalchemy werkzeug itsdangerous semgrep pytest-flask
   echo "==> Seed departments + budgets (+ Planning Analytics mock)"
   (cd "$BACKEND" && "$BACKEND/.venv/bin/python" -m scripts.seed 2026-06)
   echo "==> Frontend deps"

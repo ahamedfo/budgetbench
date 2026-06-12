@@ -1,6 +1,8 @@
 # BudgetBench
 
-A local sales-enablement tool that runs the **same coding task across IBM BOB, Claude, and GitHub Copilot**, shows live token spend / time / cost per agent, verifies each with automated tests, rolls cost up **per department**, and compares it against budgets in **IBM Planning Analytics (TM1)**.
+Run the **same coding task across IBM BOB, Claude, and GitHub Copilot** — launch all three CLIs simultaneously in isolated workspaces, capture each agent's output in real time, extract **token count / time / cost in USD**, and **store every run in SQLite**. That database is the dataset **IBM Planning Analytics** ingests to model long-term cost projections; the dashboard shows the live race, the runs database, and a preview of what PA will model.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design (components, data flow, schema, PA connector).
 
 ```
 ┌───────────────┐     SSE      ┌──────────────────────────┐
@@ -19,21 +21,23 @@ A local sales-enablement tool that runs the **same coding task across IBM BOB, C
 # open http://localhost:3000
 ```
 
-On the **Live Race** page: pick a scenario + department, hit **Launch task**, and watch the
-three agents race — the leaderboard re-sorts as the cheapest *passing* agent wins, then a
-banner shows the department's spend vs. its Planning Analytics budget. The **Dashboard** page
-shows cost-per-passing-task, spend-vs-budget, and projected annual TCO.
+One page: pick a **department** (each owns one representative task — e.g. Security → SQL
+injection fix, Finance → payroll tax bug), hit **Run this task**, and watch the three agents
+race. Every run lands in the **Runs Database** (per-scenario averages + raw runs + CSV export)
+— the dataset Planning Analytics ingests. Below it, the **Projection Preview** band previews
+the modeling that moves to PA.
 
 ## Run modes
 
 | Mode | What it does | Needs |
 |------|--------------|-------|
-| `simulated` (default) | Re-streams bundled per-tool fixtures through the real pipeline → genuine recorded tokens/cost | nothing |
+| `live` (default) | Spawns each agent's real CLI if installed (today: `claude`); others auto-fall back to recordings, badged accordingly | `claude` (and later `bob`/`copilot`) installed + authed |
+| `simulated` | Re-streams bundled per-tool recordings through the real pipeline → genuine recorded tokens/cost | nothing |
 | `replay` | Re-streams a specific prior run's captured output | a prior run |
-| `live` | Spawns the real `bob` / `claude` / `copilot` CLIs | those CLIs installed + authed |
 
-Simulated/replay exist so demos never depend on a flaky live agent — they show **real recorded
-economics** with zero CLIs installed.
+Use **Runs ×N** to batch a scenario (3/5/10/20 runs) and build the per-scenario averages that
+Planning Analytics models. Export the database anytime via the **Export CSV** button
+(`/api/export/runs.csv`).
 
 ## Layout
 
@@ -46,6 +50,8 @@ economics** with zero CLIs installed.
 
 ## Status
 
-Phases 0–2 complete (engine, simulated/replay, departments/budgets/PA mock, Live Race +
-Dashboard). Next: author more department scenarios; wire real `bob`/`copilot` once memberships
-exist; swap the PA mock for real TM1 REST. See the plan file for details.
+V1 (run → collect → store) complete: parallel CLI launch with workspace isolation, real-time
+output capture, token/time/USD extraction, SQLite storage, averages + CSV export, live Claude
+runs with deterministic verification (pytest/semgrep), and the Planning Analytics mock with
+actuals write-back. Next: Bob/Copilot live CLIs; swap the PA mock for a real TM1 (TechZone)
+instance; grow the scenario library (RPG / Java / React domains).

@@ -201,9 +201,10 @@ async def api_run(payload: dict):
     if not scenario_id:
         raise HTTPException(400, "scenario_id required")
     tools = payload.get("tools") or ["bob", "claude", "copilot"]
-    # run_mode: live | replay | simulated. Default to simulated so the app
-    # works out-of-the-box without the bob/copilot CLIs installed.
-    run_mode = payload.get("run_mode") or orchestrator.SIMULATED
+    # run_mode: live | replay | simulated. Default to LIVE — agents whose
+    # CLIs are installed run for real (today: claude); the rest fall back
+    # to their recordings automatically (see orchestrator hybrid mode).
+    run_mode = payload.get("run_mode") or orchestrator.LIVE
     department_id = payload.get("department_id")
     submitter = payload.get("submitter")
 
@@ -393,6 +394,43 @@ async def api_cost_timeline():
         return rollups.cost_timeline(conn)
     finally:
         conn.close()
+
+
+@app.get("/api/analytics/averages")
+async def api_averages():
+    """Per (scenario, tool) aggregates — the dataset Planning Analytics ingests."""
+    conn = storage_db.connect()
+    try:
+        return rollups.averages(conn)
+    finally:
+        conn.close()
+
+
+@app.get("/api/export/runs.csv")
+async def api_export_runs_csv():
+    """Flat CSV of all runs — hand-off format for the PA connector."""
+    import csv
+    import io
+    from fastapi.responses import PlainTextResponse
+
+    conn = storage_db.connect()
+    try:
+        rows = storage_db.list_runs(conn, limit=100000)
+    finally:
+        conn.close()
+    cols = ["run_id", "started_at", "scenario_id", "department_id", "tool", "model",
+            "run_mode", "input_tokens", "output_tokens", "cached_tokens",
+            "usd_cost", "duration_ms", "wall_clock_ms", "exit_code", "submitter"]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow(r)
+    return PlainTextResponse(
+        buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=budgetbench_runs.csv"},
+    )
 
 
 @app.get("/api/analytics/efficiency")

@@ -470,9 +470,11 @@ async def run_bakeoff(
     conn = storage_db.connect()
     try:
         for r in processed:
+            # Persist each agent's EFFECTIVE mode (a live request can fall
+            # back to replay per-agent when its CLI isn't installed).
             storage_db.save_run(
                 conn, run_id, r,
-                run_mode=run_mode,
+                run_mode=(r.extras or {}).get("run_mode", run_mode),
                 department_id=department_id,
                 submitter=submitter,
             )
