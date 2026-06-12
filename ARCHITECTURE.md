@@ -75,9 +75,9 @@ Interface `PlanningAnalyticsClient` (`backend/src/pa/client.py`): `read_budgets(
 ## Session talking points
 
 - **Framework**: FastAPI backend (async subprocess control + SSE streaming is natural in asyncio) + Next.js/React frontend (fast to build clean dashboards). Plain REST + SSE between them — no websockets, no queue, nothing exotic.
-- **Database**: SQLite — zero-ops, file-based, lives next to the project (same choice as Swam's engine), and trivially exportable to PA (CSV/REST).
-- **Fields stored**: see table above — tokens, USD cost, time are the core three Swam named; verification and attribution ride along.
-- **Verification**: deferred per the call, but already implemented (Swam's `objective_verifier.py`) and running — deterministic pytest/semgrep/regex checks per working copy.
+- **Database**: SQLite — zero-ops, file-based, lives next to the project (same choice as Swayam's engine), and trivially exportable to PA (CSV/REST).
+- **Fields stored**: see table above — tokens, USD cost, time are the core three Swayam named; verification and attribution ride along.
+- **Verification**: deferred per the call, but already implemented (Swayam's `objective_verifier.py`) and running — deterministic pytest/semgrep/regex checks per working copy.
 - **Open questions**: TechZone PA instance access; unattended 20× batch runner (job queue); scenario library growth (RPG / Java / React domains); Bob & Copilot CLI access for live runs.
 
 ## Run it
